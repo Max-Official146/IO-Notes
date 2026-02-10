@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 
-export default function AuthPage({ onSignIn, onSignUp, onContinueOffline, firebaseEnabled, firebaseError }) {
+export default function AuthPage({ onSignIn, onSignUp, firebaseEnabled }) {
   const [mode, setMode] = useState("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -29,10 +29,7 @@ export default function AuthPage({ onSignIn, onSignUp, onContinueOffline, fireba
         <p className="muted">Sign in or create an account to sync your notes in cloud storage.</p>
 
         {!firebaseEnabled && (
-          <p className="warning">
-            Firebase is not configured correctly. Add Vite Firebase env vars.
-            {firebaseError ? ` Error: ${firebaseError}` : ""}
-          </p>
+          <p className="warning">Firebase is not configured. Add Vite Firebase env vars to enable sign in/sign up.</p>
         )}
 
         <div className="auth-switch">
@@ -55,10 +52,6 @@ export default function AuthPage({ onSignIn, onSignUp, onContinueOffline, fireba
             {mode === "signin" ? "Sign in" : "Create account"}
           </button>
         </form>
-
-        <button type="button" className="ghost" onClick={onContinueOffline}>
-          Continue offline
-        </button>
         <p className="muted">{status}</p>
       </section>
     </main>

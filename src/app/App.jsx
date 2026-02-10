@@ -1,28 +1,19 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { ref, uploadString } from "firebase/storage";
 import Canvas from "../features/canvas/Canvas";
 import NotesList from "../features/notes/NotesList";
 import { exportCanvasToPdf } from "../features/export/pdfExport";
 import { createNote } from "../models/note";
-import AuthPage from "../features/auth/AuthPage";
-import {
-  fetchCloudNotes,
-  getFirebaseInitError,
-  isFirebaseEnabled,
-  saveNoteToCloud,
-  signInWithEmail,
-  signOutUser,
-  signUpWithEmail,
-  watchAuthState,
-} from "../core/firebase";
+import { ensureAnonymousSession, storage } from "../core/firebase";
 
 const STORAGE_KEY = "notes-pwa-local";
 
 function loadInitialNotes() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) {
+    return [];
+  }
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return [];
-    }
     return JSON.parse(raw);
   } catch {
     return [];
@@ -34,41 +25,11 @@ export default function App() {
   const [title, setTitle] = useState("Untitled note");
   const [notes, setNotes] = useState(loadInitialNotes);
   const [status, setStatus] = useState("Ready");
-  const [user, setUser] = useState(null);
-  const [authResolved, setAuthResolved] = useState(false);
-  const [offlineMode, setOfflineMode] = useState(false);
-  const firebaseEnabled = isFirebaseEnabled();
-  const firebaseError = getFirebaseInitError();
-
-  useEffect(() => {
-    const unsubscribe = watchAuthState((nextUser) => {
-      setUser(nextUser);
-      setAuthResolved(true);
-    });
-    return () => unsubscribe?.();
-  }, []);
 
   const persist = useCallback((nextNotes) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(nextNotes));
     setNotes(nextNotes);
   }, []);
-
-  useEffect(() => {
-    if (!firebaseEnabled || !user) {
-      return;
-    }
-
-    fetchCloudNotes(user.uid)
-      .then((cloudNotes) => {
-        if (cloudNotes.length) {
-          persist(cloudNotes);
-          setStatus("Loaded cloud notes.");
-        }
-      })
-      .catch((error) => {
-        setStatus(error?.message || "Using local notes. Cloud load failed.");
-      });
-  }, [firebaseEnabled, persist, user]);
 
   const saveNote = async () => {
     if (!canvasApi?.canvas) {
@@ -76,21 +37,18 @@ export default function App() {
     }
 
     const imageData = canvasApi.canvas.toDataURL("image/png");
-    const note = createNote({ id: crypto.randomUUID(), title: title.trim() || "Untitled note", imageData });
+    const note = createNote({ id: crypto.randomUUID(), title, imageData });
     const next = [note, ...notes];
     persist(next);
 
-    if (firebaseEnabled && user) {
-      try {
-        await saveNoteToCloud({ userId: user.uid, note });
-        setStatus("Saved locally + in cloud storage");
-      } catch (error) {
-        setStatus(error?.message || "Saved locally. Cloud save failed.");
-      }
-      return;
+    try {
+      await ensureAnonymousSession();
+      const cloudRef = ref(storage, `notes/${note.id}.png`);
+      await uploadString(cloudRef, imageData, "data_url");
+      setStatus("Saved locally + uploaded to Firebase Storage");
+    } catch {
+      setStatus("Saved locally. Add Firebase env vars to enable cloud upload.");
     }
-
-    setStatus("Saved locally. Sign in to sync cloud storage.");
   };
 
   const openNote = (note) => {
@@ -107,29 +65,6 @@ export default function App() {
   };
 
   const noteCountLabel = useMemo(() => `${notes.length} note${notes.length === 1 ? "" : "s"}`, [notes]);
-
-  if (!authResolved) {
-    return (
-      <main className="auth-page">
-        <section className="auth-card">
-          <h1>Loading...</h1>
-          <p className="muted">Checking authentication state.</p>
-        </section>
-      </main>
-    );
-  }
-
-  if (!user && !offlineMode) {
-    return (
-      <AuthPage
-        firebaseEnabled={firebaseEnabled}
-        firebaseError={firebaseError}
-        onSignIn={signInWithEmail}
-        onSignUp={signUpWithEmail}
-        onContinueOffline={() => setOfflineMode(true)}
-      />
-    );
-  }
 
   return (
     <main className="app">
@@ -149,15 +84,6 @@ export default function App() {
           <button type="button" onClick={() => document.documentElement.requestFullscreen?.()}>
             Fullscreen
           </button>
-          {user ? (
-            <button type="button" onClick={signOutUser}>
-              Sign out
-            </button>
-          ) : (
-            <button type="button" onClick={() => setOfflineMode(false)}>
-              Go to sign in
-            </button>
-          )}
         </div>
         <Canvas onReady={setCanvasApi} />
       </section>
@@ -165,7 +91,7 @@ export default function App() {
       <aside className="panel">
         <h2>Notes list</h2>
         <p>{noteCountLabel}</p>
-        <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Note title" />
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Note title" />
         <NotesList notes={notes} onOpen={openNote} />
       </aside>
     </main>
