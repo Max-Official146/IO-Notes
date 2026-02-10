@@ -1,45 +1,28 @@
-# Notes PWA (Own Backend)
+# Notes PWA
 
-A handwritten notes PWA using React + Canvas with a custom Node.js backend (no Firebase).
+A starter Progressive Web App for handwritten notes with React + Canvas + Firebase.
 
-## What changed
-- Email/password auth is handled by the local backend.
-- Notes are saved in backend JSON storage (`server/data`).
-- App still supports offline local mode.
+## Features in this starter
+- Pencil/finger/mouse drawing via Pointer Events.
+- Local notes list with saved canvas snapshots.
+- Firebase Storage upload path for cloud save.
+- PDF export using jsPDF.
+- PWA manifest for Add to Home Screen support.
+- Fullscreen toggle.
 
-## 1) Install
+## Run locally
 ```bash
 npm install
+npm run dev
 ```
 
-## 2) Run backend
+Set Firebase environment variables in a `.env` file when ready:
+
 ```bash
-npm run server
+VITE_FIREBASE_API_KEY=
+VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_PROJECT_ID=
+VITE_FIREBASE_STORAGE_BUCKET=
+VITE_FIREBASE_MESSAGING_SENDER_ID=
+VITE_FIREBASE_APP_ID=
 ```
-Backend starts on `http://localhost:8787`.
-
-## 3) Run frontend
-Open another terminal:
-```bash
-npm run dev -- --host
-```
-Frontend starts on `http://localhost:5173`.
-
-## 4) Use app
-- Open frontend URL.
-- Sign up (first time) or sign in.
-- Draw and save notes.
-- Notes sync to your own backend storage.
-
-## API base URL override (optional)
-Create `.env` in root:
-```bash
-VITE_API_BASE_URL=http://localhost:8787
-```
-
-## Backend data files
-- `server/data/users.json`
-- `server/data/notes.json`
-
-## Security note
-This backend is intended for local/dev use. Before production, migrate to a real database, proper session management, HTTPS, stricter CORS, and hardened auth.

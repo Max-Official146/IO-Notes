@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
 
-export default function AuthPage({ onSignIn, onSignUp, onContinueOffline, backendStatus }) {
+export default function AuthPage({ onSignIn, onSignUp, firebaseEnabled }) {
   const [mode, setMode] = useState("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState("Use your email and password to continue.");
-  const disabled = useMemo(() => !email || !password || backendStatus === "offline", [email, password, backendStatus]);
+  const disabled = useMemo(() => !email || !password || !firebaseEnabled, [email, password, firebaseEnabled]);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -26,9 +26,11 @@ export default function AuthPage({ onSignIn, onSignUp, onContinueOffline, backen
     <main className="auth-page">
       <section className="auth-card">
         <h1>My Notes</h1>
-        <p className="muted">Sign in or create an account to sync your notes using your own backend server.</p>
+        <p className="muted">Sign in or create an account to sync your notes in cloud storage.</p>
 
-        {backendStatus === "offline" && <p className="warning">Backend offline. Start server with `npm run server`.</p>}
+        {!firebaseEnabled && (
+          <p className="warning">Firebase is not configured. Add Vite Firebase env vars to enable sign in/sign up.</p>
+        )}
 
         <div className="auth-switch">
           <button type="button" className={mode === "signin" ? "active" : ""} onClick={() => setMode("signin")}>
@@ -50,10 +52,6 @@ export default function AuthPage({ onSignIn, onSignUp, onContinueOffline, backen
             {mode === "signin" ? "Sign in" : "Create account"}
           </button>
         </form>
-
-        <button type="button" className="ghost" onClick={onContinueOffline}>
-          Continue offline
-        </button>
         <p className="muted">{status}</p>
       </section>
     </main>
