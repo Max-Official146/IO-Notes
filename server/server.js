@@ -72,26 +72,9 @@ function verifyPassword(password, hashed) {
   return crypto.timingSafeEqual(Buffer.from(computed, "hex"), Buffer.from(expectedHash, "hex"));
 }
 
-function toBase64Url(input) {
-  return Buffer.from(input).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-function fromBase64Url(input) {
-  const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
-  const padding = normalized.length % 4 === 0 ? "" : "=".repeat(4 - (normalized.length % 4));
-  return Buffer.from(`${normalized}${padding}`, "base64").toString("utf-8");
-}
-
-function createId() {
-  if (typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return crypto.randomBytes(16).toString("hex");
-}
-
 function createToken(payload) {
-  const body = toBase64Url(JSON.stringify(payload));
-  const signature = crypto.createHmac("sha256", TOKEN_SECRET).update(body).digest("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const signature = crypto.createHmac("sha256", TOKEN_SECRET).update(body).digest("base64url");
   return `${body}.${signature}`;
 }
 
@@ -100,14 +83,12 @@ function parseToken(token) {
   if (!body || !signature) {
     return null;
   }
-
-  const expected = crypto.createHmac("sha256", TOKEN_SECRET).update(body).digest("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  const expected = crypto.createHmac("sha256", TOKEN_SECRET).update(body).digest("base64url");
   if (signature !== expected) {
     return null;
   }
-
   try {
-    return JSON.parse(fromBase64Url(body));
+    return JSON.parse(Buffer.from(body, "base64url").toString("utf-8"));
   } catch {
     return null;
   }
@@ -141,7 +122,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       const user = {
-        id: createId(),
+        id: crypto.randomUUID(),
         email: normalizedEmail,
         passwordHash: hashPassword(password),
         createdAt: Date.now(),
@@ -192,7 +173,7 @@ const server = http.createServer(async (req, res) => {
 
         const notes = readJson(NOTES_FILE);
         const note = {
-          id: createId(),
+          id: crypto.randomUUID(),
           userId: user.id,
           title: (title || "Untitled note").trim() || "Untitled note",
           imageData,
@@ -219,14 +200,4 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`Notes backend running on http://${HOST}:${PORT}`);
-});
-
-server.on("error", (error) => {
-  if (error.code === "EADDRINUSE") {
-    console.error(`Port ${PORT} is already in use. Set another port, e.g. PORT=8788 npm run server`);
-    process.exit(1);
-  }
-
-  console.error("Backend failed to start:", error.message);
-  process.exit(1);
 });
