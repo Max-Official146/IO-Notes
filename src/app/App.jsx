@@ -1,18 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { ref, uploadString } from "firebase/storage";
 import Canvas from "../features/canvas/Canvas";
 import NotesList from "../features/notes/NotesList";
 import { exportCanvasToPdf } from "../features/export/pdfExport";
 import { createNote } from "../models/note";
-import AuthPage from "../features/auth/AuthPage";
-import {
-  fetchCloudNotes,
-  isFirebaseEnabled,
-  saveNoteToCloud,
-  signInWithEmail,
-  signOutUser,
-  signUpWithEmail,
-  watchAuthState,
-} from "../core/firebase";
+import { ensureAnonymousSession, storage } from "../core/firebase";
 
 const STORAGE_KEY = "notes-pwa-local";
 
@@ -33,35 +25,11 @@ export default function App() {
   const [title, setTitle] = useState("Untitled note");
   const [notes, setNotes] = useState(loadInitialNotes);
   const [status, setStatus] = useState("Ready");
-  const [user, setUser] = useState(null);
-  const firebaseEnabled = isFirebaseEnabled();
-
-  useEffect(() => {
-    const unsubscribe = watchAuthState(setUser);
-    return () => unsubscribe?.();
-  }, []);
 
   const persist = useCallback((nextNotes) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(nextNotes));
     setNotes(nextNotes);
   }, []);
-
-  useEffect(() => {
-    if (!firebaseEnabled || !user) {
-      return;
-    }
-
-    fetchCloudNotes(user.uid)
-      .then((cloudNotes) => {
-        if (cloudNotes.length) {
-          persist(cloudNotes);
-          setStatus("Loaded cloud notes.");
-        }
-      })
-      .catch(() => {
-        setStatus("Using local notes. Cloud load failed.");
-      });
-  }, [firebaseEnabled, persist, user]);
 
   const saveNote = async () => {
     if (!canvasApi?.canvas) {
@@ -73,17 +41,14 @@ export default function App() {
     const next = [note, ...notes];
     persist(next);
 
-    if (firebaseEnabled && user) {
-      try {
-        await saveNoteToCloud({ userId: user.uid, note });
-        setStatus("Saved locally + in cloud storage");
-      } catch {
-        setStatus("Saved locally. Cloud save failed.");
-      }
-      return;
+    try {
+      await ensureAnonymousSession();
+      const cloudRef = ref(storage, `notes/${note.id}.png`);
+      await uploadString(cloudRef, imageData, "data_url");
+      setStatus("Saved locally + uploaded to Firebase Storage");
+    } catch {
+      setStatus("Saved locally. Add Firebase env vars to enable cloud upload.");
     }
-
-    setStatus("Saved locally. Sign in to sync cloud storage.");
   };
 
   const openNote = (note) => {
@@ -100,10 +65,6 @@ export default function App() {
   };
 
   const noteCountLabel = useMemo(() => `${notes.length} note${notes.length === 1 ? "" : "s"}`, [notes]);
-
-  if (!user) {
-    return <AuthPage firebaseEnabled={firebaseEnabled} onSignIn={signInWithEmail} onSignUp={signUpWithEmail} />;
-  }
 
   return (
     <main className="app">
@@ -123,9 +84,6 @@ export default function App() {
           <button type="button" onClick={() => document.documentElement.requestFullscreen?.()}>
             Fullscreen
           </button>
-          <button type="button" onClick={signOutUser}>
-            Sign out
-          </button>
         </div>
         <Canvas onReady={setCanvasApi} />
       </section>
@@ -133,7 +91,7 @@ export default function App() {
       <aside className="panel">
         <h2>Notes list</h2>
         <p>{noteCountLabel}</p>
-        <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Note title" />
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Note title" />
         <NotesList notes={notes} onOpen={openNote} />
       </aside>
     </main>

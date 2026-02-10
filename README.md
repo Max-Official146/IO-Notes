@@ -2,14 +2,13 @@
 
 A starter Progressive Web App for handwritten notes with React + Canvas + Firebase.
 
-## Features in this version
-- Sign in / Sign up UI with Firebase Auth.
+## Features in this starter
 - Pencil/finger/mouse drawing via Pointer Events.
 - Local notes list with saved canvas snapshots.
-- Cloud save via Firebase Storage + Firestore metadata.
+- Firebase Storage upload path for cloud save.
 - PDF export using jsPDF.
 - PWA manifest for Add to Home Screen support.
-- Fullscreen toggle and sign-out action.
+- Fullscreen toggle.
 
 ## Run locally
 ```bash
@@ -17,7 +16,7 @@ npm install
 npm run dev
 ```
 
-Set Firebase environment variables in a `.env` file:
+Set Firebase environment variables in a `.env` file when ready:
 
 ```bash
 VITE_FIREBASE_API_KEY=
