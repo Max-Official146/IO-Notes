@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { Note } from "../models/Note.js";
+import { ApiError } from "../utils/apiError.js";
 
 const blockSchema = z.object({
   type: z.enum(["typed", "canvas", "media"]),
@@ -45,6 +46,11 @@ export async function updateNote(req, res, next) {
       input,
       { new: true },
     );
+
+    if (!note) {
+      throw new ApiError(404, "Note not found");
+    }
+
     res.json({ note });
   } catch (error) {
     next(error);

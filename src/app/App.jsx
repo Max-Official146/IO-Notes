@@ -1,20 +1,27 @@
-import { useCallback, useMemo, useState } from "react";
-import { ref, uploadString } from "firebase/storage";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Canvas from "../features/canvas/Canvas";
 import NotesList from "../features/notes/NotesList";
 import { exportCanvasToPdf } from "../features/export/pdfExport";
 import { createNote } from "../models/note";
-import { ensureAnonymousSession, storage } from "../core/firebase";
+import AuthPage from "../features/auth/AuthPage";
+import {
+  checkBackendHealth,
+  fetchNotes,
+  getStoredUser,
+  saveNoteToCloud,
+  signInWithEmail,
+  signOutUser,
+  signUpWithEmail,
+} from "../core/api";
 
-// ...rest of code
 const STORAGE_KEY = "notes-pwa-local";
 
 function loadInitialNotes() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) {
-    return [];
-  }
   try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
     return JSON.parse(raw);
   } catch {
     return [];
@@ -26,11 +33,49 @@ export default function App() {
   const [title, setTitle] = useState("Untitled note");
   const [notes, setNotes] = useState(loadInitialNotes);
   const [status, setStatus] = useState("Ready");
+  const [user, setUser] = useState(getStoredUser);
+  const [offlineMode, setOfflineMode] = useState(false);
+  const [backendStatus, setBackendStatus] = useState("checking");
+
+  useEffect(() => {
+    checkBackendHealth()
+      .then(() => setBackendStatus("online"))
+      .catch(() => setBackendStatus("offline"));
+  }, []);
 
   const persist = useCallback((nextNotes) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(nextNotes));
     setNotes(nextNotes);
   }, []);
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    fetchNotes()
+      .then((cloudNotes) => {
+        if (cloudNotes.length) {
+          persist(cloudNotes);
+          setStatus("Loaded notes from backend.");
+        }
+      })
+      .catch((error) => {
+        setStatus(error?.message || "Using local notes. Backend load failed.");
+      });
+  }, [persist, user]);
+
+  const handleSignIn = async (email, password) => {
+    const nextUser = await signInWithEmail(email, password);
+    setUser(nextUser);
+    setStatus("Signed in.");
+  };
+
+  const handleSignUp = async (email, password) => {
+    const nextUser = await signUpWithEmail(email, password);
+    setUser(nextUser);
+    setStatus("Account created.");
+  };
 
   const saveNote = async () => {
     if (!canvasApi?.canvas) {
@@ -38,18 +83,21 @@ export default function App() {
     }
 
     const imageData = canvasApi.canvas.toDataURL("image/png");
-    const note = createNote({ id: crypto.randomUUID(), title, imageData });
+    const note = createNote({ id: crypto.randomUUID(), title: title.trim() || "Untitled note", imageData });
     const next = [note, ...notes];
     persist(next);
 
-    try {
-      await ensureAnonymousSession();
-      const cloudRef = ref(storage, `notes/${note.id}.png`);
-      await uploadString(cloudRef, imageData, "data_url");
-      setStatus("Saved locally + uploaded to Firebase Storage");
-    } catch {
-      setStatus("Saved locally. Add Firebase env vars to enable cloud upload.");
+    if (user && !offlineMode) {
+      try {
+        await saveNoteToCloud(note);
+        setStatus("Saved locally + backend storage");
+      } catch (error) {
+        setStatus(error?.message || "Saved locally. Backend save failed.");
+      }
+      return;
     }
+
+    setStatus("Saved locally (offline mode).");
   };
 
   const openNote = (note) => {
@@ -66,6 +114,17 @@ export default function App() {
   };
 
   const noteCountLabel = useMemo(() => `${notes.length} note${notes.length === 1 ? "" : "s"}`, [notes]);
+
+  if (!user && !offlineMode) {
+    return (
+      <AuthPage
+        backendStatus={backendStatus}
+        onSignIn={handleSignIn}
+        onSignUp={handleSignUp}
+        onContinueOffline={() => setOfflineMode(true)}
+      />
+    );
+  }
 
   return (
     <main className="app">
@@ -85,6 +144,21 @@ export default function App() {
           <button type="button" onClick={() => document.documentElement.requestFullscreen?.()}>
             Fullscreen
           </button>
+          {user ? (
+            <button
+              type="button"
+              onClick={() => {
+                signOutUser();
+                setUser(null);
+              }}
+            >
+              Sign out
+            </button>
+          ) : (
+            <button type="button" onClick={() => setOfflineMode(false)}>
+              Go to sign in
+            </button>
+          )}
         </div>
         <Canvas onReady={setCanvasApi} />
       </section>
@@ -92,7 +166,7 @@ export default function App() {
       <aside className="panel">
         <h2>Notes list</h2>
         <p>{noteCountLabel}</p>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Note title" />
+        <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Note title" />
         <NotesList notes={notes} onOpen={openNote} />
       </aside>
     </main>

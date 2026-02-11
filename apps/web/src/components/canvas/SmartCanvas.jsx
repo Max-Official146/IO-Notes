@@ -19,11 +19,13 @@ export function SmartCanvas({ onStrokesChange }) {
 
     const stage = event.target.getStage();
     const point = stage.getPointerPosition();
+    const pressure = event.evt.pressure || 0.5;
 
     setLines((prev) => {
       const next = [...prev];
       const current = next[next.length - 1];
       current.points = current.points.concat([point.x, point.y]);
+      current.pressure = pressure;
       onStrokesChange?.(next);
       return next;
     });
@@ -41,8 +43,8 @@ export function SmartCanvas({ onStrokesChange }) {
         height={500}
         className="rounded-lg border border-slate-200 dark:border-slate-700"
         onMouseDown={handlePointerDown}
-        onMousemove={handlePointerMove}
-        onMouseup={handlePointerUp}
+        onMouseMove={handlePointerMove}
+        onMouseUp={handlePointerUp}
         onTouchStart={handlePointerDown}
         onTouchMove={handlePointerMove}
         onTouchEnd={handlePointerUp}
