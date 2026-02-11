@@ -6,6 +6,7 @@ import { exportCanvasToPdf } from "../features/export/pdfExport";
 import { createNote } from "../models/note";
 import { ensureAnonymousSession, storage } from "../core/firebase";
 
+// ...rest of code
 const STORAGE_KEY = "notes-pwa-local";
 
 function loadInitialNotes() {
